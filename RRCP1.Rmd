@@ -1,0 +1,142 @@
+---
+title: "Reproducible Research Course Project1"
+author: "Wang Xuezhi"
+date: "2019,3,20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This assignment makes use of data from a personal activity monitoring device. this device collects data at 5 minute intervals through out the day. the data consists of two months of data from an anonymous individual collected during the months of October and November,2012 and include the number of steps taken in 5 minute intervals each day.
+
+##Data source
+The data was downloaded from course website: [Activity Monitoring Data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip)
+
+The variables included in this dataset are:
+
+**steps**: Number of steps taking in a 5-minute interval (missing values are coded as NA\color{red}{\verb|NA|}NA)
+    
+**date**: The date on which the measurement was taken in YYYY-MM-DD format
+    
+**interval**: Identifier for the 5-minute interval in which measurement was taken
+
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+##Library and Load the data
+```{r}
+library(plyr)
+library(ggplot2)
+activity<-read.csv("activity.csv")
+```
+
+##Preparing the data 
+Have a initial look of the dataset's dimension and colume names. Then creat a colume of "day" to mark weekday and weekend. Screen out the missing value, put the valid data in new dataset named"activity1".
+```{r}
+dim(activity)
+head(activity,3)
+
+activity_cl<-activity[!is.na(activity$steps),]
+```
+
+## Mean steps per day
+Calculate the total number of steps perday
+```{r}
+activity_mn<-aggregate(activity_cl$steps~activity_cl$date,FUN=sum)
+colnames(activity_mn)<-c("date","steps")
+```
+
+Plot histogram of daily steps number.
+
+```{r}
+hist(activity_mn$steps,col="green",main="Daily steps number")
+```
+
+Calculate the mean and median of total number per day.
+```{r}
+dailymean<-mean(activity_mn$steps)
+dailymedian<-median(activity_mn$steps)
+print(paste0("Daily mean steps each day is ",as.integer(dailymean)))
+print(paste0("Daily median steps each day is ",dailymedian))
+```
+
+
+##The average daily activity pattern
+
+Calculate the average steps of each interval,put the value in variable activity_av. Then mark the interval that has the maximum average steps in a day. Plot the meansteps versus 5minutes interval of activity_av.
+```{r}
+activity_av<-aggregate(activity_cl$steps~activity_cl$interval,FUN=mean)
+colnames(activity_av)<-c("interval","steps")
+activity_av$steps<-as.integer(activity_av$steps)
+stepsmax<-max(activity_av$steps)
+intervalmax<-activity_av$interval[activity_av$steps==stepsmax]
+with(activity_av,plot(interval,steps,type="l",main="Average steps of every 5minutes in a day"))
+abline(v=intervalmax,col="red",lwd=3)
+
+print(paste0("The interval with the max steps ave number of a day is No. ",intervalmax,",  as indicated by the red line in figure"))
+print(paste0("The max steps ave number  is ",as.integer(stepsmax)))
+```
+##Imputing missing values
+
+Calculate the total number of missing value.
+```{r}
+nrow(activity[is.na(activity$steps),])
+```
+The total number of rows with steps value missed is 2304.
+
+Filling in NAs with average steps of 5 minutes interval:
+Firstly,creat a subset containing all NA rows, named "activityna"
+Secondly,merge "activityna" with "activity_av"Put the new dataset in variable activity_mg.
+Thirdly,subset and rename activity_mg, store the result in activity_fil.
+At last,rowbind activity_cl and activity_fil to form the new dataset that missing values were filled.
+
+```{r}
+activityna<-activity[is.na(activity$steps),]
+activity_mg<-merge(activityna,activity_av,by="interval")
+activity_fil<-activity_mg[,c(4,3,1)]
+colnames(activity_fil)<-c("steps","date","interval")
+activity_new<-rbind(activity_cl,activity_fil)
+
+```
+
+calculate the mean of new dataset.
+Plot histogram of new dataset.
+```{r}
+activity_mn_new<-aggregate(activity_new$steps~activity_new$date,FUN=sum)
+colnames(activity_mn_new)<-c("date","steps")
+
+hist(activity_mn_new$steps,col="green",main="Steps number w/o NA imputting")
+hist(activity_mn$steps,col="red",add=T)
+legend("topright",c("Imputed Data","NA excluded data"),fill=c("green","red"))
+```
+
+Calculate the mean and median of new dataset.
+```{r}
+Newmean<-as.integer(mean(activity_mn_new$steps))
+Newmedian<-median(activity_mn_new$steps)
+Newmean
+Newmedian
+```
+The new mean with NA imputed by interval average is 10749, compared to 10766 which ignored NA. The new median is 10641,compared to 10765 which ignored NA.
+
+##The differences between weekdays and weekends
+
+creat new columes to mark weekday and weekend.
+Then calculate the average number of steps taken respectively. 
+```{r}
+library(lattice)
+activity_new$day<-weekdays(as.Date(activity_new$date))
+
+activity_new$WKD<-ifelse(activity_new$day %in% c("星期六", "星期日"), "Weekend", "Weekday")
+WDay<-subset(activity_new,WKD=="Weekday")
+WDaymean<-aggregate(WDay$steps~WDay$interval,FUN=mean)
+colnames(WDaymean)<-c("interval","steps")
+WEnd<-subset(activity_new,WKD=="Weekend")
+WEndmean<-aggregate(WEnd$steps~WEnd$interval,FUN=mean)
+colnames(WEndmean)<-c("interval","steps")
+
+activity_newAV<-ddply(activity_new,.(interval,WKD),summarize,Avg=mean(steps))
+xyplot(Avg~interval|WKD,data=activity_newAV,type="l",layout=c(1,2),main="Average Steps per Interval Based on Type of Day",ylab="Average Number of Steps",xlab="Interval")
+```
